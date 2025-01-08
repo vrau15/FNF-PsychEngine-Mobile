@@ -1,73 +1,51 @@
-name: Build
+name: Windows Cloud PC - Anydesk (Optimized)
 
 on:
-  workflow_call:
-    inputs:
-      name:
-        required: true
-        type: string
-      os:
-        required: true
-        type: string
-      setupCommand:
-        required: true
-        type: string
-      buildArgs:
-        required: true
-        type: string
-      artifactName:
-        required: true
-        type: string
-      artifactPath:
-        required: true
-        type: string
-
-env:
-  HAXE_VERSION: 4.3.6
-  PROJECT_NAME: PsychEngine
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build
-    runs-on: ${{ inputs.os }}
+    name: Start Building...
+    runs-on: windows-latest
+    timeout-minutes: 10080  # MÃ¡ximo de 7 dias para evitar tempo de execuÃ§Ã£o excessivo
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@main
-
-      - name: Setup Haxe
-        uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: ${{ env.HAXE_VERSION }}
-
-      - name: Install libVLC
-        if: inputs.name == 'Linux'
-        run: sudo apt install libvlc-dev libvlccore-dev
-
-      - name: Install Libraries
-        run: ${{ inputs.setupCommand }}
-
-      - name: Configure Android
-        if: inputs.name == 'Android'
+      - name: Downloading & Installing Essentials
         run: |
-          haxelib run lime config ANDROID_SDK $ANDROID_HOME
-          haxelib run lime config ANDROID_NDK_ROOT $ANDROID_NDK_LATEST_HOME
-          haxelib run lime config JAVA_HOME $JAVA_HOME_17_arm64
-          haxelib run lime config ANDROID_SETUP true
+          # Baixa o arquivo .bat para instalar componentes essenciais
+          Invoke-WebRequest -Uri "https://www.dropbox.com/scl/fi/7eiczvgil84czu55dxep3/Downloads.bat?rlkey=wzdc1wxjsph2b7r0atplmdz3p&dl=1" -OutFile "Downloads.bat"
+          # Executa o script .bat para instalar os componentes
+          cmd /c Downloads.bat
 
-      - name: Compile
-        run: haxelib run lime build ${{ inputs.buildArgs }}
-
-      - name: Make IPA
-        if: inputs.name == 'iOS'
+      - name: Log In To AnyDesk
         run: |
-          cd export/release/ios/build/Release-iphoneos
-          mkdir Payload
-          mv *.app Payload
-          zip -r ${{ env.PROJECT_NAME }}.ipa Payload
+          # Verifica se o arquivo start.bat existe antes de executar
+          if (Test-Path "start.bat") {
+            cmd /c start.bat
+          } else {
+            Write-Host "Arquivo start.bat nÃ£o encontrado. Verifique a configuraÃ§Ã£o."
+          }
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@main
-        with:
-          name: ${{ inputs.artifactName }}
-          path: ${{ inputs.artifactPath }}
-          if-no-files-found: error
+      - name: Monitor and Restart AnyDesk if Needed
+        run: |
+          # Monitora a conexÃ£o do AnyDesk e reinicia se necessÃ¡rio
+          while ($true) {
+            $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if (-not $process) {
+              Write-Host "AnyDesk nÃ£o estÃ¡ rodando, reiniciando..."
+              cmd /c start.bat
+            }
+            Start-Sleep -Seconds 300  # Verifica a cada 5 minutos
+          }
+
+      - name: Time Counter (Long Running Task)
+        run: |
+          # Configura para manter a mÃ¡quina em execuÃ§Ã£o
+          Start-Sleep -Seconds 604800  # 7 dias de execuÃ§Ã£o contÃ­nua
+
+      - name: Clean Up Temporary Files
+        if: success()  # Executa esta etapa apenas se todas as etapas anteriores forem bem-sucedidas
+        run: |
+          # Remove arquivos temporÃ¡rios ou logs gerados
+          Remove-Item Downloads.bat -Force
+          Write-Host "Limpeza completa."
